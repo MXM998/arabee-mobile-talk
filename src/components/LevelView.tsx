@@ -55,7 +55,7 @@ export function LevelView({ levels, onAddStudent, onUpdatePoints, onPromoteStude
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-foreground">المستويات والطلاب</h2>
+        <h2 className="text-2xl font-bold text-foreground">مستويات طلاب Knowledge</h2>
         <Dialog open={isLevelDialogOpen} onOpenChange={setIsLevelDialogOpen}>
           <DialogTrigger asChild>
             <Button className="bg-gradient-secondary text-secondary-foreground hover:bg-secondary/80">
@@ -160,7 +160,7 @@ export function LevelView({ levels, onAddStudent, onUpdatePoints, onPromoteStude
                 {level.students.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>لا يوجد طلاب في هذا المستوى</p>
+                    <p>لا يوجد طلاب Knowledge في هذا المستوى</p>
                   </div>
                 ) : (
                   <div className="grid gap-4">

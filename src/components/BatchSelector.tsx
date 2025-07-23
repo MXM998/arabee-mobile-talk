@@ -70,7 +70,7 @@ export function BatchSelector({ batches, currentBatch, onSelectBatch, onCreateBa
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h1 className="text-3xl font-bold text-foreground mb-2">إدارة طلاب اللغة العربية</h1>
+        <h1 className="text-3xl font-bold text-foreground mb-2">إدارة طلاب Knowledge MXM</h1>
         <p className="text-muted-foreground">اختر دفعة أو قم بإنشاء دفعة جديدة</p>
       </div>
 

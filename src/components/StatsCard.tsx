@@ -26,7 +26,7 @@ export function StatsCard({ batch }: StatsCardProps) {
             <Users className="w-4 h-4 text-primary" />
           </div>
           <div className="text-2xl font-bold text-foreground">{totalStudents}</div>
-          <div className="text-xs text-muted-foreground">إجمالي الطلاب</div>
+          <div className="text-xs text-muted-foreground">إجمالي طلاب Knowledge</div>
         </CardContent>
       </Card>
 
