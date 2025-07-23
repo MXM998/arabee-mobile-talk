@@ -16,6 +16,21 @@ const config: CapacitorConfig = {
       androidSpinnerStyle: 'large',
       iosSpinnerStyle: 'small',
       spinnerColor: '#D4A574'
+    },
+    CapacitorSQLite: {
+      iosDatabaseLocation: 'Library/CapacitorDatabase',
+      iosIsEncryption: false,
+      iosKeychainPrefix: 'arabee',
+      iosBiometric: {
+        biometricAuth: false,
+        biometricTitle: 'Biometric login for capacitor sqlite'
+      },
+      androidIsEncryption: false,
+      androidBiometric: {
+        biometricAuth: false,
+        biometricTitle: 'Biometric login for capacitor sqlite',
+        biometricSubTitle: 'Log in using your biometric'
+      }
     }
   }
 };

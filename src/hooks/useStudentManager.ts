@@ -1,197 +1,278 @@
 import { useState, useEffect } from 'react';
 import { Student, Level, Batch } from '@/types/app';
 import { useToast } from '@/hooks/use-toast';
+import { databaseService } from '@/services/database';
 
 export function useStudentManager() {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [currentBatch, setCurrentBatch] = useState<Batch | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  // Load data from localStorage on mount
+  // Initialize database and load data
   useEffect(() => {
-    const savedData = localStorage.getItem('arabee-student-data');
-    if (savedData) {
+    const initializeDatabase = async () => {
       try {
-        const data = JSON.parse(savedData);
-        setBatches(data.batches || []);
-        setCurrentBatch(data.currentBatch || null);
+        await databaseService.initialize();
+        const loadedBatches = await databaseService.getAllBatches();
+        setBatches(loadedBatches);
+        
+        // Get current batch from localStorage as fallback
+        const savedCurrentBatchId = localStorage.getItem('arabee-current-batch-id');
+        if (savedCurrentBatchId) {
+          const currentBatchFromStorage = loadedBatches.find(b => b.id === savedCurrentBatchId);
+          if (currentBatchFromStorage) {
+            setCurrentBatch(currentBatchFromStorage);
+          }
+        }
       } catch (error) {
-        console.error('Error loading data:', error);
+        console.error('Error initializing database:', error);
+        toast({
+          title: "خطأ في قاعدة البيانات",
+          description: "فشل في تحميل البيانات",
+          variant: "destructive"
+        });
+      } finally {
+        setIsLoading(false);
       }
-    }
+    };
+
+    initializeDatabase();
   }, []);
 
-  // Save data to localStorage whenever state changes
+  // Save current batch ID to localStorage
   useEffect(() => {
-    const dataToSave = {
-      batches,
-      currentBatch
-    };
-    localStorage.setItem('arabee-student-data', JSON.stringify(dataToSave));
-  }, [batches, currentBatch]);
+    if (currentBatch) {
+      localStorage.setItem('arabee-current-batch-id', currentBatch.id);
+    } else {
+      localStorage.removeItem('arabee-current-batch-id');
+    }
+  }, [currentBatch]);
 
-  const createBatch = (name: string, number: number) => {
-    const newBatch: Batch = {
-      id: crypto.randomUUID(),
-      name,
-      number,
-      levels: [
-        {
-          id: crypto.randomUUID(),
-          name: 'المستوى الأول',
-          sessionsCount: 4,
-          students: []
-        }
-      ],
-      createdAt: new Date()
-    };
+  const createBatch = async (name: string, number: number) => {
+    try {
+      const newBatch: Batch = {
+        id: crypto.randomUUID(),
+        name,
+        number,
+        levels: [
+          {
+            id: crypto.randomUUID(),
+            name: 'المستوى الأول',
+            sessionsCount: 4,
+            students: []
+          }
+        ],
+        createdAt: new Date()
+      };
 
-    setBatches(prev => [...prev, newBatch]);
-    setCurrentBatch(newBatch);
-    
-    toast({
-      title: "تم إنشاء الدفعة بنجاح",
-      description: `دفعة ${name} - رقم ${number}`,
-    });
-
-    return newBatch;
-  };
-
-  const addStudent = (levelId: string, student: Omit<Student, 'id' | 'levelId' | 'points'>) => {
-    if (!currentBatch) return;
-
-    const newStudent: Student = {
-      id: crypto.randomUUID(),
-      ...student,
-      levelId,
-      points: 0
-    };
-
-    const updatedBatch = {
-      ...currentBatch,
-      levels: currentBatch.levels.map(level =>
-        level.id === levelId
-          ? { ...level, students: [...level.students, newStudent] }
-          : level
-      )
-    };
-
-    setCurrentBatch(updatedBatch);
-    setBatches(prev => prev.map(batch => batch.id === currentBatch.id ? updatedBatch : batch));
-    
-    toast({
-      title: "تم إضافة الطالب بنجاح",
-      description: newStudent.name,
-    });
-  };
-
-  const updateStudentPoints = (studentId: string, pointsToAdd: number) => {
-    if (!currentBatch) return;
-
-    const updatedBatch = {
-      ...currentBatch,
-      levels: currentBatch.levels.map(level => ({
-        ...level,
-        students: level.students.map(student =>
-          student.id === studentId
-            ? { ...student, points: student.points + pointsToAdd }
-            : student
-        )
-      }))
-    };
-
-    setCurrentBatch(updatedBatch);
-    setBatches(prev => prev.map(batch => batch.id === currentBatch.id ? updatedBatch : batch));
-    
-    if (pointsToAdd > 0) {
+      await databaseService.createBatch(newBatch);
+      setBatches(prev => [...prev, newBatch]);
+      setCurrentBatch(newBatch);
+      
       toast({
-        title: "تم إضافة النقاط بنجاح",
-        description: `${pointsToAdd} نقطة`,
+        title: "تم إنشاء الدفعة بنجاح",
+        description: `دفعة ${name} - رقم ${number}`,
+      });
+
+      return newBatch;
+    } catch (error) {
+      console.error('Error creating batch:', error);
+      toast({
+        title: "خطأ",
+        description: "فشل في إنشاء الدفعة",
+        variant: "destructive"
       });
     }
   };
 
-  const promoteStudent = (studentId: string) => {
+  const addStudent = async (levelId: string, student: Omit<Student, 'id' | 'levelId' | 'points'>) => {
     if (!currentBatch) return;
 
-    const student = currentBatch.levels
-      .flatMap(level => level.students)
-      .find(s => s.id === studentId);
-    
-    if (!student) return;
-
-    const currentLevelIndex = currentBatch.levels.findIndex(level => 
-      level.students.some(s => s.id === studentId)
-    );
-
-    if (currentLevelIndex === -1) return;
-
-    // Create next level if it doesn't exist
-    let nextLevelIndex = currentLevelIndex + 1;
-    let updatedLevels = [...currentBatch.levels];
-
-    if (nextLevelIndex >= updatedLevels.length) {
-      const newLevel: Level = {
+    try {
+      const newStudent: Student = {
         id: crypto.randomUUID(),
-        name: `المستوى ${nextLevelIndex + 1}`,
-        sessionsCount: 4,
-        students: []
+        ...student,
+        levelId,
+        points: 0
       };
-      updatedLevels.push(newLevel);
+
+      await databaseService.addStudent(newStudent);
+
+      const updatedBatch = {
+        ...currentBatch,
+        levels: currentBatch.levels.map(level =>
+          level.id === levelId
+            ? { ...level, students: [...level.students, newStudent] }
+            : level
+        )
+      };
+
+      setCurrentBatch(updatedBatch);
+      setBatches(prev => prev.map(batch => batch.id === currentBatch.id ? updatedBatch : batch));
+      
+      toast({
+        title: "تم إضافة الطالب بنجاح",
+        description: newStudent.name,
+      });
+    } catch (error) {
+      console.error('Error adding student:', error);
+      toast({
+        title: "خطأ",
+        description: "فشل في إضافة الطالب",
+        variant: "destructive"
+      });
     }
-
-    // Move student to next level and reset points
-    updatedLevels = updatedLevels.map((level, index) => {
-      if (index === currentLevelIndex) {
-        return {
-          ...level,
-          students: level.students.filter(s => s.id !== studentId)
-        };
-      } else if (index === nextLevelIndex) {
-        return {
-          ...level,
-          students: [...level.students, { ...student, points: 0, levelId: level.id }]
-        };
-      }
-      return level;
-    });
-
-    const updatedBatch = {
-      ...currentBatch,
-      levels: updatedLevels
-    };
-
-    setCurrentBatch(updatedBatch);
-    setBatches(prev => prev.map(batch => batch.id === currentBatch.id ? updatedBatch : batch));
-    
-    toast({
-      title: "تم ترقية الطالب بنجاح! 🎉",
-      description: `${student.name} انتقل إلى ${updatedLevels[nextLevelIndex].name}`,
-    });
   };
 
-  const addLevel = (name: string, sessionsCount: number) => {
+  const updateStudentPoints = async (studentId: string, pointsToAdd: number) => {
     if (!currentBatch) return;
 
-    const newLevel: Level = {
-      id: crypto.randomUUID(),
-      name,
-      sessionsCount,
-      students: []
-    };
+    try {
+      const student = currentBatch.levels
+        .flatMap(level => level.students)
+        .find(s => s.id === studentId);
+      
+      if (!student) return;
 
-    const updatedBatch = {
-      ...currentBatch,
-      levels: [...currentBatch.levels, newLevel]
-    };
+      const newPoints = student.points + pointsToAdd;
+      await databaseService.updateStudentPoints(studentId, newPoints);
 
-    setCurrentBatch(updatedBatch);
-    setBatches(prev => prev.map(batch => batch.id === currentBatch.id ? updatedBatch : batch));
-    
-    toast({
-      title: "تم إضافة المستوى بنجاح",
-      description: name,
-    });
+      const updatedBatch = {
+        ...currentBatch,
+        levels: currentBatch.levels.map(level => ({
+          ...level,
+          students: level.students.map(student =>
+            student.id === studentId
+              ? { ...student, points: newPoints }
+              : student
+          )
+        }))
+      };
+
+      setCurrentBatch(updatedBatch);
+      setBatches(prev => prev.map(batch => batch.id === currentBatch.id ? updatedBatch : batch));
+      
+      if (pointsToAdd > 0) {
+        toast({
+          title: "تم إضافة النقاط بنجاح",
+          description: `${pointsToAdd} نقطة`,
+        });
+      }
+    } catch (error) {
+      console.error('Error updating student points:', error);
+      toast({
+        title: "خطأ",
+        description: "فشل في تحديث النقاط",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const promoteStudent = async (studentId: string) => {
+    if (!currentBatch) return;
+
+    try {
+      const student = currentBatch.levels
+        .flatMap(level => level.students)
+        .find(s => s.id === studentId);
+      
+      if (!student) return;
+
+      const currentLevelIndex = currentBatch.levels.findIndex(level => 
+        level.students.some(s => s.id === studentId)
+      );
+
+      if (currentLevelIndex === -1) return;
+
+      // Create next level if it doesn't exist
+      let nextLevelIndex = currentLevelIndex + 1;
+      let updatedLevels = [...currentBatch.levels];
+
+      if (nextLevelIndex >= updatedLevels.length) {
+        const newLevel: Level = {
+          id: crypto.randomUUID(),
+          name: `المستوى ${nextLevelIndex + 1}`,
+          sessionsCount: 4,
+          students: []
+        };
+        updatedLevels.push(newLevel);
+      }
+
+      // Move student to next level and reset points
+      updatedLevels = updatedLevels.map((level, index) => {
+        if (index === currentLevelIndex) {
+          return {
+            ...level,
+            students: level.students.filter(s => s.id !== studentId)
+          };
+        } else if (index === nextLevelIndex) {
+          return {
+            ...level,
+            students: [...level.students, { ...student, points: 0, levelId: level.id }]
+          };
+        }
+        return level;
+      });
+
+      const updatedBatch = {
+        ...currentBatch,
+        levels: updatedLevels
+      };
+
+      // Update database
+      await databaseService.updateBatch(updatedBatch);
+
+      setCurrentBatch(updatedBatch);
+      setBatches(prev => prev.map(batch => batch.id === currentBatch.id ? updatedBatch : batch));
+      
+      toast({
+        title: "تم ترقية الطالب بنجاح! 🎉",
+        description: `${student.name} انتقل إلى ${updatedLevels[nextLevelIndex].name}`,
+      });
+    } catch (error) {
+      console.error('Error promoting student:', error);
+      toast({
+        title: "خطأ",
+        description: "فشل في ترقية الطالب",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const addLevel = async (name: string, sessionsCount: number) => {
+    if (!currentBatch) return;
+
+    try {
+      const newLevel: Level = {
+        id: crypto.randomUUID(),
+        name,
+        sessionsCount,
+        students: []
+      };
+
+      await databaseService.addLevel(newLevel, currentBatch.id);
+
+      const updatedBatch = {
+        ...currentBatch,
+        levels: [...currentBatch.levels, newLevel]
+      };
+
+      setCurrentBatch(updatedBatch);
+      setBatches(prev => prev.map(batch => batch.id === currentBatch.id ? updatedBatch : batch));
+      
+      toast({
+        title: "تم إضافة المستوى بنجاح",
+        description: name,
+      });
+    } catch (error) {
+      console.error('Error adding level:', error);
+      toast({
+        title: "خطأ",
+        description: "فشل في إضافة المستوى",
+        variant: "destructive"
+      });
+    }
   };
 
   return {
@@ -202,6 +283,7 @@ export function useStudentManager() {
     addStudent,
     updateStudentPoints,
     promoteStudent,
-    addLevel
+    addLevel,
+    isLoading
   };
 }
