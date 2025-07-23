@@ -17,13 +17,9 @@ export function useStudentManager() {
         const loadedBatches = await databaseService.getAllBatches();
         setBatches(loadedBatches);
         
-        // Get current batch from localStorage as fallback
-        const savedCurrentBatchId = localStorage.getItem('arabee-current-batch-id');
-        if (savedCurrentBatchId) {
-          const currentBatchFromStorage = loadedBatches.find(b => b.id === savedCurrentBatchId);
-          if (currentBatchFromStorage) {
-            setCurrentBatch(currentBatchFromStorage);
-          }
+        // Set first batch as current if available
+        if (loadedBatches.length > 0) {
+          setCurrentBatch(loadedBatches[0]);
         }
       } catch (error) {
         console.error('Error initializing database:', error);
@@ -40,14 +36,7 @@ export function useStudentManager() {
     initializeDatabase();
   }, []);
 
-  // Save current batch ID to localStorage
-  useEffect(() => {
-    if (currentBatch) {
-      localStorage.setItem('arabee-current-batch-id', currentBatch.id);
-    } else {
-      localStorage.removeItem('arabee-current-batch-id');
-    }
-  }, [currentBatch]);
+  // Current batch state management (no localStorage needed)
 
   const createBatch = async (name: string, number: number) => {
     try {
